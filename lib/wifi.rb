@@ -1,48 +1,35 @@
-require 'ruby-growl'
-
 class WiFiConnectionStatus
   def initialize
     @online    = true
-    @growler   = Growl.new 'localhost', 'wifi', ['offline', 'online']
     @count     = 0
     @interface = detect_interface
-
-    File.open(File.dirname(__FILE__) + '/snarks.txt') do |file|
-      @snarks = file.readlines 
-    end
   end
-  
+
   def reconnect
     `/usr/sbin/networksetup -setairportpower #{@interface} off`
     sleep(2)      
     `/usr/sbin/networksetup -setairportpower #{@interface} on`
   end
 
-  def snark
-    @online ? @snarks.shuffle.first.strip + "\n" : ''
-  end
-  
   def disconnection_count
     @online ? "\nDisconnection count: #{@count}" : ''
   end
-  
-  def growl( arguments )
-    @growler.notify arguments[:name] , arguments[:title] || '' , snark + (arguments[:body] || '') + disconnection_count
-  end
-  
+
   def check_connection
+    puts "\nChecking connection on #{@interface}."
     result = %x(ping -W2 -c3 google.com 2>&1)
     if result["100.0% packet loss"] || result["Unknown"]
       @count += 1 if @online
-      growl( :name => 'offline', :title => 'The internet is gone again', :body => "You've lost your Wifi connection again." ) if @online
+      puts '  The internet is gone again' if @online
       reconnect
       @online = false
     else
-      growl( :name => 'online', :title => 'The internet is back', :body => 'Enjoy it while it lasts' ) unless @online
+      puts '  The internet is still active.' if @online
+      puts '  The internet is back' unless @online
       @online = true
     end
   end
-  
+
   def detect_interface
     active_interface = ""
     `ifconfig -lu`.split.each do |interface|
@@ -52,7 +39,7 @@ class WiFiConnectionStatus
         break
       end
     end
-    
+
     if active_interface.empty?
       puts "WiFi interface not found. Make sure your WiFi is turned on."
       exit
@@ -60,4 +47,13 @@ class WiFiConnectionStatus
       active_interface
     end
   end
+end
+
+wifi_checker = WiFiConnectionStatus.new
+
+puts "WiFiConnectionStatus activated."
+
+while true
+  wifi_checker.check_connection
+  sleep 5
 end
